@@ -1,0 +1,4 @@
+.layout__two .desktop__nav__links,
+.layout__two .mobile__nav__flex {
+  background-color: var(--dark-bg);
+}

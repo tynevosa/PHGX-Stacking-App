@@ -1,0 +1,13 @@
+* {
+  padding: 0;
+  margin: 0;
+}
+
+:root {
+  --border-radius: 12px;
+  --orange: #ff6000;
+  --padding: 0 4rem;
+  --dark-bg: #24252a;
+  --light-orange: #ff8941;
+  --mobile-padding: 0 2rem;
+}
