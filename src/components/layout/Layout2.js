@@ -115,13 +115,13 @@ const MobileNav = () => {
       <div className={`mobile__nav__flex ${hasScrolled ? "scroll" : ""}`}>
         <div className="mobileLogo">
           <a href="/">
-            <Image src={Logo} width={100} height={100} />
+            <Image src={Logo} width={100} height={100} alt=""/>
           </a>
           <h3 className="logo__text">New Phoenix</h3>
         </div>
 
         <div className="mobile__nav__menu__icon">
-          <Image src={Menu} onClick={handleMenuClick} className="img" />
+          <Image src={Menu} onClick={handleMenuClick} className="img" alt=""/>
         </div>
       </div>
 
@@ -156,7 +156,7 @@ const MobileNav = () => {
           </div>
 
           <div className="mobile__nav__logo">
-            <Image src={Logo} className="img" />
+            <Image src={Logo} className="img" alt="" />
           </div>
         </div>
       )}

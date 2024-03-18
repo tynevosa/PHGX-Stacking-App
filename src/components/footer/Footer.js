@@ -32,7 +32,7 @@ function Footer() {
 
       <div className="certik">
         <p>Smart contract audited by:</p>
-        <Image src={Certik} className="footer__cervik__img" />
+        <Image src={Certik} className="footer__cervik__img" alt="" />
         <p className="footer__c">© New Phoenix LLC 2024</p>
       </div>
     </div>

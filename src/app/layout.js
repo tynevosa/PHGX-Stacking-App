@@ -1,5 +1,6 @@
 import "./globals.css";
 
+import Web3Providers from "@/providers/web3Provider";
 import { Capriola, Reggae_One, Unlock } from "next/font/google";
 
 import localFont from "next/font/local";
@@ -41,7 +42,9 @@ export default function RootLayout({ children }) {
       lang="en"
       className={`${capriola.variable} ${reggeaOne.variable} ${trebuc.variable}  ${unlock.variable}`}
     >
-      <body>{children}</body>
+      <Web3Providers>
+        <body>{children}</body>
+      </Web3Providers>
     </html>
   );
 }

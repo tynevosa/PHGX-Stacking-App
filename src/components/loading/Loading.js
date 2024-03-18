@@ -6,7 +6,7 @@ import "./Loading.css";
 function Loading() {
   return (
     <div className="loading">
-      <Image src={Logo} width={200} height={200} />
+      <Image src={Logo} width={200} height={200} alt="" />
       <section>
         <div></div>
         <div></div>

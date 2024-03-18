@@ -1,134 +1,260 @@
 "use client";
 
+// import { ethers } from "ethers";
+import "./Stake.css";
+import React, { useEffect, useRef, useState } from "react";
 import { Arrow } from "@/assets/images";
 import Button from "@/components/button/Button";
 import ButtonContainer from "@/components/button/ButtonContainer";
 import Layout from "@/components/layout/Layout";
 import Layout2 from "@/components/layout/Layout2";
 import Image from "next/image";
-import React, { useState } from "react";
-import "./Stake.css";
-
-const durationOptions = [
-  {
-    label: "3 months lock up",
-    duration: "3 months",
-    date: "23/05/2024",
-    balance: 1000000,
-    apy: 25,
-  },
-
-  {
-    label: "Flexible",
-    duration: "Anytime",
-    date: "23/05/2024",
-    balance: 1000000,
-    apy: 6,
-  },
-
-  // Add more duration options as needed
-];
-
-const unstakeOptions = [
-  {
-    label: "PHGX Pool 1",
-    duration: "15: 00: 00",
-    stake: 1000000,
-    principal: 1000000,
-    reward: 100000,
-  },
-
-  {
-    label: "Flexible",
-    duration: "Anytime",
-    stake: 1000000,
-    principal: 1000000,
-    reward: 100000,
-  },
-];
-
-const Modal = ({ toggleModal, selectedOption }) => {
-  const handleDurationClick = (option) => {
-    toggleModal(option);
-  };
-
-  return (
-    <div className="modal">
-      <div className="modal__content">
-        {durationOptions.map((option, index) => {
-          return (
-            <div
-              key={index}
-              onClick={() => handleDurationClick(option)}
-              className="modal__content__option"
-            >
-              <p
-                style={{
-                  color:
-                    selectedOption === option ? "var(--light-orange)" : "#fff",
-                }}
-              >
-                {selectedOption === option ? option.label + " ✓" : option.label}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-const UnstakeModal = ({ toggleModal, selectedOption }) => {
-  const handleDurationClick = (duration) => {
-    toggleModal(duration);
-  };
-
-  return (
-    <div className="modal">
-      <div className="modal__content">
-        {unstakeOptions.map((option, index) => {
-          return (
-            <div
-              key={index}
-              onClick={() => handleDurationClick(option)}
-              className="modal__content__option"
-            >
-              <p
-                style={{
-                  color:
-                    selectedOption === option ? "var(--light-orange)" : "#fff",
-                }}
-              >
-                {selectedOption === option ? option.label + " ✓" : option.label}
-              </p>{" "}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
+import useActiveWagmi from "@/hooks/useActiveWagmi";
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { writeContract, readContract, waitForTransaction } from "@wagmi/core";
+import { useContractWrite } from "wagmi";
+import { formatEther, parseEther } from "viem";
+import { constants } from "@/const";
+import tokenContractAbi from "@/abi/PHGXToken.json";
+import stakingContractAbi from "@/abi/PHGXStaking.json";
 
 function Stake() {
+  const { account, isConnected, balance } = useActiveWagmi();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [maxValue, setMaxValue] = useState(1.1);
+  const [stakeAmount, setStakeAmount] = useState();
   const [isStakeSelected, setIsStakeSelected] = useState(true);
-  const [selectedOption, setSelectedOption] = useState(null);
-  const [unstakeSelectedOption, setUnstakeSelectedOption] = useState(null);
+  const [stakingPlans, setStakingPlans] = useState([]);
+  const [unstakingPlans, setUnstakingPlans] = useState([]);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [unstakeSelectedPlan, setUnstakeSelectedPlan] = useState(null);
 
-  const toggleModal = (option) => {
+  const { openConnectModal } = useConnectModal();
+
+  const Modal = ({ toggleModal, selectedPlan }) => {
+    const handleDurationClick = (plan) => {
+      toggleModal(plan);
+    };
+
+    return (
+      <div className="modal">
+        <div className="modal__content">
+          {stakingPlans.map((plan, index) => {
+            return (
+              <div
+                key={index}
+                onClick={() => handleDurationClick(plan)}
+                className="modal__content__option"
+              >
+                <p
+                  style={{
+                    color:
+                      selectedPlan === plan ? "var(--light-orange)" : "#fff",
+                  }}
+                >
+                  {selectedPlan === plan ? plan.label + " ✓" : plan.label}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const UnstakeModal = ({ toggleModal, selectedPlan }) => {
+    const handleDurationClick = (duration) => {
+      toggleModal(duration);
+    };
+  
+    return (
+      <div className="modal">
+        <div className="modal__content">
+          {unstakingPlans.map((plan, index) => {
+            return (
+              <div
+                key={index}
+                onClick={() => handleDurationClick(plan)}
+                className="modal__content__option"
+              >
+                <p
+                  style={{
+                    color:
+                      selectedPlan === plan ? "var(--light-orange)" : "#fff",
+                  }}
+                >
+                  {selectedPlan === plan ? plan.label + " ✓" : plan.label}
+                </p>{" "}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+  
+  const toggleModal = (plan) => {
     setIsModalOpen(!isModalOpen);
-    if (option) {
-      setSelectedOption(option);
+    if (plan) {
+      setSelectedPlan(plan);
     }
   };
 
-  const toggleUnstakeModal = (option) => {
+  const toggleUnstakeModal = (plan) => {
     setIsModalOpen(!isModalOpen);
-    if (option) {
-      setUnstakeSelectedOption(option);
+    if (plan) {
+      setUnstakeSelectedPlan(plan);
     }
   };
+
+  const fetchPools = async () => {
+    setUnstakingPlans([])
+    try {
+      const planCount = await readContract({
+        abi: stakingContractAbi,
+        address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+        functionName: "planCount",
+      });
+      let plans = [];
+      for( let i=0; i<planCount; i++ ) {
+        const plan = await readContract({
+          abi: stakingContractAbi,
+          address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+          functionName: "plans",
+          args: [BigInt(i)],
+        });
+        plans.push({
+          id: i,
+          label: Number(BigInt(plan[1])) ? `${plan[1]} seconds lock up` : 'Flexible',
+          duration: `${Number(BigInt(plan[1])) ? plan[1] : 'Anytime'}`,
+          apy: `${plan[0]}`,
+          minimalAmount: plan[2]
+        });
+      }
+      setStakingPlans(plans);
+      setSelectedPlan(plans[0]);
+      try {
+        let unPlans = [];
+        const stakerInfo = await readContract({
+          abi: stakingContractAbi,
+          address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+          functionName: "getStaker",
+          account: account,
+        });
+        const planId = Number(BigInt(stakerInfo['planId']));
+        const stakedAmount = formatEther(stakerInfo['amount']);
+        unPlans.push({
+          label: plans[planId].label,
+          duration: `${stakerInfo['timeRemaining']}`,
+          stake: `${stakedAmount}`,
+          reward: `${stakedAmount*plans[planId].apy/100}`,
+        });
+        setUnstakingPlans(unPlans);
+        setUnstakeSelectedPlan(unPlans[0]);
+        countdownTimer(unPlans[0].duration);
+      } catch (error) {
+        // console.error("fetching staker information: ", error);
+      }
+    } catch (error) {
+      console.error("fetching Pools: ", error);
+    }
+  };
+
+  useEffect(() => {
+    if (isConnected) {
+      fetchPools();
+    } else {
+      // openConnectModal();
+    }
+  }, [account, isConnected]);
+
+  const handleStake = async () => {
+    if (stakeAmount < selectedPlan?.minimalAmount) return;
+    if (!isConnected) {
+      openConnectModal();
+    } else {
+      const allowance = await readContract({
+        address: constants.process.env.TOKEN_CONTRACT_ADDRESS,
+        abi: tokenContractAbi,
+        functionName: "allowance",
+        args: [account ?? `0x${""}`, constants.process.env.STAKING_CONTRACT_ADDRESS],
+      });
+      if (allowance !== undefined && Number(BigInt(allowance)) < +stakeAmount) {
+        const approveTx = await writeContract({
+          abi: tokenContractAbi,
+          address: constants.process.env.TOKEN_CONTRACT_ADDRESS,
+          functionName: "approve",
+          args: [constants.process.env.STAKING_CONTRACT_ADDRESS, parseEther(stakeAmount)],
+        });
+        if (approveTx.hash) {
+          await waitForTransaction({
+            hash: approveTx.hash,
+          })
+          const stakeTx = await writeContract({
+            address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+            abi: stakingContractAbi,
+            functionName: "stake",
+            args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
+          })
+          if (stakeTx.hash) {
+            await waitForTransaction({
+              hash: stakeTx.hash,
+            })
+            fetchPools();
+          }
+        }
+      } else {
+        const stakeTx = await writeContract({
+          address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+          abi: stakingContractAbi,
+          functionName: "stake",
+          args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
+        })
+        if (stakeTx.hash) {
+          await waitForTransaction({
+            hash: stakeTx.hash,
+          })
+          fetchPools();
+        }
+      }
+      setStakeAmount(0);
+    }
+  }
+
+  const handleUnstake = async () => {
+    if (stakeAmount != unstakeSelectedPlan?.stake) return;
+    if (!isConnected) {
+      openConnectModal();
+    } else {
+      // unstake
+      const unstakeTx = await writeContract({
+        abi: stakingContractAbi,
+        address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+        functionName: "unstake",
+      });
+      if (unstakeTx.hash) {
+        await waitForTransaction({
+          hash: unstakeTx.hash,
+        })
+        fetchPools();
+      }
+      setStakeAmount(0);
+    }
+  }
+
+  function countdownTimer(seconds) {
+    if(seconds > 0){
+      const unstakeInterval = setInterval(() => {
+        seconds--;
+        setUnstakeSelectedPlan(prevState => ({
+          ...prevState,
+          duration: seconds
+        }));
+        if (seconds === 0) {
+          clearInterval(unstakeInterval);
+        }
+      }, 1000);
+    }
+  }
 
   return (
     <Layout2>
@@ -145,7 +271,7 @@ function Stake() {
         <div className="stake__box">
           <div className="stake__box__heads">
             <h3
-              onClick={() => setIsStakeSelected(true)}
+              onClick={() => {setIsStakeSelected(true); setStakeAmount(0)}}
               className={isStakeSelected && "active"}
             >
               stake
@@ -162,41 +288,41 @@ function Stake() {
             <section>
               <div className="stake__box__body">
                 <p>
-                  APY : <span> {selectedOption && selectedOption.apy}% </span>
+                  APY : <span> {selectedPlan && selectedPlan.apy}% </span>
                 </p>
               </div>
 
               <div className="box__dropdown" onClick={() => toggleModal()}>
                 <p
                   style={{
-                    color: selectedOption ? "var(--light-orange)" : "white",
-                    opacity: selectedOption ? 1 : 0.6,
+                    color: selectedPlan ? "var(--light-orange)" : "white",
+                    opacity: selectedPlan ? 1 : 0.6,
                   }}
                 >
-                  {selectedOption
-                    ? selectedOption.label
+                  {selectedPlan
+                    ? selectedPlan.label
                     : "Choose your lock up period"}
                 </p>
-                <Image src={Arrow} width={15} height={15} />
+                <Image alt="Image" src={Arrow} width={15} height={15} />
               </div>
 
               {/* Modal */}
               {isModalOpen && (
                 <Modal
                   toggleModal={toggleModal}
-                  selectedOption={selectedOption}
+                  selectedPlan={selectedPlan}
                 />
               )}
 
-              {selectedOption && !isModalOpen ? (
+              {selectedPlan && !isModalOpen ? (
                 <div className="duration__list">
                   <p>
-                    Unlocking: <span> {selectedOption.duration} </span>
+                    Unlocking: <span> {selectedPlan.duration} </span>
                   </p>
 
                   <p>
-                    Your Balance: <span> {selectedOption.balance} </span>{" "}
-                    {selectedOption.balance == 0 && (
+                    Your Balance: <span> {balance} </span>{" "}
+                    {balance == 0 && (
                       <span
                         style={{ textDecoration: "underline", fontSize: 12 }}
                       >
@@ -211,18 +337,19 @@ function Stake() {
               <div className={`box__dropdown max ${isModalOpen ? "open" : ""}`}>
                 <input
                   type={"text"}
-                  value={selectedOption?.balance > 0 ? maxValue : 0}
-                  onChange={(e) => setMaxValue(e.target.value)}
+                  value={stakeAmount}
+                  onChange={(e) => setStakeAmount(e.target.value)}
                   className="stake__input"
+
                 />
-                <p onClick={() => setMaxValue(selectedOption?.balance)}>max</p>
+                <p onClick={() => setStakeAmount(balance)}>max</p>
               </div>
 
               <div
                 className="stake__btn"
-                style={{ opacity: selectedOption?.balance > 0 ? 1 : 0.4 }}
+                style={{ opacity: isConnected ? selectedPlan && stakeAmount >= parseFloat(selectedPlan?.minimalAmount) && stakeAmount <= balance ? 1 : 0.4 : 1}}
               >
-                <Button text={selectedOption ? "stake" : "connect wallet"} />
+                <Button text={isConnected ? "stake" : "connect wallet"} onClick={handleStake}/>
               </div>
             </section>
           ) : (
@@ -236,40 +363,40 @@ function Stake() {
               <div className="box__dropdown" onClick={() => toggleModal()}>
                 <p
                   style={{
-                    color: unstakeSelectedOption
+                    color: unstakeSelectedPlan
                       ? "var(--light-orange)"
                       : "white",
-                    opacity: unstakeSelectedOption ? 1 : 0.6,
+                    opacity: unstakeSelectedPlan ? 1 : 0.6,
                   }}
                 >
-                  {unstakeSelectedOption
-                    ? unstakeSelectedOption.label
+                  {unstakeSelectedPlan
+                    ? unstakeSelectedPlan.label
                     : "Choose a pool"}
                 </p>
-                <Image src={Arrow} width={15} height={15} />
+                <Image alt="Image" src={Arrow} width={15} height={15} />
               </div>
 
               {/* Modal */}
               {isModalOpen && (
                 <UnstakeModal
                   toggleModal={toggleUnstakeModal}
-                  selectedOption={unstakeSelectedOption}
+                  selectedPlan={unstakeSelectedPlan}
                 />
               )}
 
-              {unstakeSelectedOption && !isModalOpen ? (
+              {unstakeSelectedPlan && !isModalOpen ? (
                 <div className="duration__list unstake">
                   <p>
                     Unlocking in:{" "}
                     <p className="duration">
                       {" "}
-                      {unstakeSelectedOption.duration}{" "}
+                      {unstakeSelectedPlan.duration}{"s"}
                     </p>
                   </p>
 
                   <p>
-                    Principal: <span> {unstakeSelectedOption.principal} </span>{" "}
-                    {unstakeSelectedOption.balance == 0 && (
+                    Principal: <span> {unstakeSelectedPlan.stake} </span>{" "}
+                    {unstakeSelectedPlan.balance == 0 && (
                       <span
                         style={{ textDecoration: "underline", fontSize: 12 }}
                       >
@@ -280,7 +407,7 @@ function Stake() {
                   </p>
 
                   <p>
-                    Reward: <span> {unstakeSelectedOption.reward} </span>
+                    Reward: <span> {unstakeSelectedPlan.reward} </span>
                   </p>
                 </div>
               ) : null}
@@ -288,11 +415,11 @@ function Stake() {
               <div className={`box__dropdown max ${isModalOpen ? "open" : ""}`}>
                 <input
                   type={"text"}
-                  value={unstakeSelectedOption?.balance > 0 ? maxValue : 0}
-                  onChange={(e) => setMaxValue(e.target.value)}
+                  value={stakeAmount}
+                  onChange={(e) => setStakeAmount(e.target.value)}
                   className="stake__input"
                 />
-                <p onClick={() => setMaxValue(unstakeSelectedOption?.balance)}>
+                <p onClick={() => setStakeAmount(unstakeSelectedPlan?.stake)}>
                   max
                 </p>
               </div>
@@ -300,11 +427,11 @@ function Stake() {
               <div
                 className="stake__btn"
                 style={{
-                  opacity: unstakeSelectedOption?.balance > 0 ? 1 : 0.4,
+                  opacity: isConnected ? unstakeSelectedPlan && unstakeSelectedPlan?.duration=='0' && unstakeSelectedPlan?.stake == stakeAmount ? 1 : 0.4 : 1,
                 }}
               >
                 <Button
-                  text={unstakeSelectedOption ? "withdraw" : "connect wallet"}
+                  text={isConnected ? "withdraw" : "connect wallet"} onClick={handleUnstake}
                 />
               </div>
             </section>

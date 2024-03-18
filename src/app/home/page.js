@@ -50,6 +50,7 @@ function Homepage() {
         <div className="stake__view">
           <div className="stake__view__img">
             <Image
+              alt=""
               src={D2}
               className="img"
               // style={{ width: 450, height: 450 }}
