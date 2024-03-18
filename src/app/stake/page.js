@@ -14,7 +14,6 @@ import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { writeContract, readContract, waitForTransaction } from "@wagmi/core";
 import { useContractWrite } from "wagmi";
 import { formatEther, parseEther } from "viem";
-import { constants } from "@/const";
 import tokenContractAbi from "@/abi/PHGXToken.json";
 import stakingContractAbi from "@/abi/PHGXStaking.json";
 
@@ -111,14 +110,14 @@ function Stake() {
     try {
       const planCount = await readContract({
         abi: stakingContractAbi,
-        address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+        address: process.env.STAKING_CONTRACT_ADDRESS,
         functionName: "planCount",
       });
       let plans = [];
       for( let i=0; i<planCount; i++ ) {
         const plan = await readContract({
           abi: stakingContractAbi,
-          address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+          address: process.env.STAKING_CONTRACT_ADDRESS,
           functionName: "plans",
           args: [BigInt(i)],
         });
@@ -136,7 +135,7 @@ function Stake() {
         let unPlans = [];
         const stakerInfo = await readContract({
           abi: stakingContractAbi,
-          address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+          address: process.env.STAKING_CONTRACT_ADDRESS,
           functionName: "getStaker",
           account: account,
         });
@@ -173,24 +172,24 @@ function Stake() {
       openConnectModal();
     } else {
       const allowance = await readContract({
-        address: constants.process.env.TOKEN_CONTRACT_ADDRESS,
+        address: process.env.TOKEN_CONTRACT_ADDRESS,
         abi: tokenContractAbi,
         functionName: "allowance",
-        args: [account ?? `0x${""}`, constants.process.env.STAKING_CONTRACT_ADDRESS],
+        args: [account ?? `0x${""}`, process.env.STAKING_CONTRACT_ADDRESS],
       });
       if (allowance !== undefined && Number(BigInt(allowance)) < +stakeAmount) {
         const approveTx = await writeContract({
           abi: tokenContractAbi,
-          address: constants.process.env.TOKEN_CONTRACT_ADDRESS,
+          address: process.env.TOKEN_CONTRACT_ADDRESS,
           functionName: "approve",
-          args: [constants.process.env.STAKING_CONTRACT_ADDRESS, parseEther(stakeAmount)],
+          args: [process.env.STAKING_CONTRACT_ADDRESS, parseEther(stakeAmount)],
         });
         if (approveTx.hash) {
           await waitForTransaction({
             hash: approveTx.hash,
           })
           const stakeTx = await writeContract({
-            address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+            address: process.env.STAKING_CONTRACT_ADDRESS,
             abi: stakingContractAbi,
             functionName: "stake",
             args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
@@ -204,7 +203,7 @@ function Stake() {
         }
       } else {
         const stakeTx = await writeContract({
-          address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+          address: process.env.STAKING_CONTRACT_ADDRESS,
           abi: stakingContractAbi,
           functionName: "stake",
           args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
@@ -228,7 +227,7 @@ function Stake() {
       // unstake
       const unstakeTx = await writeContract({
         abi: stakingContractAbi,
-        address: constants.process.env.STAKING_CONTRACT_ADDRESS,
+        address: process.env.STAKING_CONTRACT_ADDRESS,
         functionName: "unstake",
       });
       if (unstakeTx.hash) {

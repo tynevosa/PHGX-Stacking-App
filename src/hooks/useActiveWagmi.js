@@ -5,13 +5,12 @@ import {
   usePublicClient,
   useWalletClient,
 } from "wagmi";
-import { constants } from "@/const";
 
 const useActiveWagmi = () => {
   const { address, connector, isConnecting, isConnected } = useAccount();
   const balance = useBalance({
     address: address,
-    token: constants.process.env.TOKEN_CONTRACT_ADDRESS, 
+    token: process.env.TOKEN_CONTRACT_ADDRESS, 
   })
   const { chain, chains } = useNetwork();
   const provider = usePublicClient();
