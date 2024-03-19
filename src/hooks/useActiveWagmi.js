@@ -21,7 +21,7 @@ const useActiveWagmi = () => {
 
   return {
     account: address,
-    balance: parseFloat(balance.data?.formatted),
+    balance: balance.data?.formatted,
     isConnected,
     isConnecting,
     chain,
