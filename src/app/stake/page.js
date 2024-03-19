@@ -20,6 +20,7 @@ import { constants } from "@/const";
 
 function Stake() {
   const { account, isConnected, balance } = useActiveWagmi();
+  const [phgxBalance, setPhgxBalance] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [stakeAmount, setStakeAmount] = useState();
   const [isStakeSelected, setIsStakeSelected] = useState(true);
@@ -162,6 +163,7 @@ function Stake() {
   useEffect(() => {
     if (isConnected) {
       fetchPools();
+      setPhgxBalance(balance);
     } else {
       // openConnectModal();
     }
@@ -169,6 +171,8 @@ function Stake() {
 
   const handleStake = async () => {
     if (stakeAmount < selectedPlan?.minimalAmount) return;
+    const stakingAmount = stakeAmount;
+    setStakeAmount(0);
     if (!isConnected) {
       openConnectModal();
     } else {
@@ -178,12 +182,12 @@ function Stake() {
         functionName: "allowance",
         args: [account ?? `0x${""}`, constants.stakingContractAddress],
       });
-      if (allowance !== undefined && Number(BigInt(allowance)) < +stakeAmount) {
+      if (allowance !== undefined && Number(BigInt(allowance)) < +stakingAmount) {
         const approveTx = await writeContract({
           abi: tokenContractAbi,
           address: constants.tokenContractAddress,
           functionName: "approve",
-          args: [constants.stakingContractAddress, parseEther(stakeAmount)],
+          args: [constants.stakingContractAddress, parseEther(stakingAmount)],
         });
         if (approveTx.hash) {
           await waitForTransaction({
@@ -193,12 +197,13 @@ function Stake() {
             address: constants.stakingContractAddress,
             abi: stakingContractAbi,
             functionName: "stake",
-            args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
+            args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
           })
           if (stakeTx.hash) {
             await waitForTransaction({
               hash: stakeTx.hash,
             })
+            setPhgxBalance(prevState => prevState-stakingAmount);
             fetchPools();
           }
         }
@@ -207,12 +212,13 @@ function Stake() {
           address: constants.stakingContractAddress,
           abi: stakingContractAbi,
           functionName: "stake",
-          args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
+          args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
         })
         if (stakeTx.hash) {
           await waitForTransaction({
             hash: stakeTx.hash,
           })
+          setPhgxBalance(prevState => prevState-stakingAmount);
           fetchPools();
         }
       }
@@ -222,6 +228,7 @@ function Stake() {
 
   const handleUnstake = async () => {
     if (stakeAmount != unstakeSelectedPlan?.stake) return;
+    setStakeAmount(0);
     if (!isConnected) {
       openConnectModal();
     } else {
@@ -235,6 +242,7 @@ function Stake() {
         await waitForTransaction({
           hash: unstakeTx.hash,
         })
+        setPhgxBalance(prevState => prevState+unstakeSelectedPlan?.stake+unstakeSelectedPlan?.reward);
         fetchPools();
       }
       setStakeAmount(0);
@@ -321,8 +329,8 @@ function Stake() {
                   </p>
 
                   <p>
-                    Your Balance: <span> {balance} </span>{" "}
-                    {balance == 0 && (
+                    Your Balance: <span> {phgxBalance} </span>{" "}
+                    {phgxBalance == 0 && (
                       <span
                         style={{ textDecoration: "underline", fontSize: 12 }}
                       >
@@ -342,12 +350,12 @@ function Stake() {
                   className="stake__input"
 
                 />
-                <p onClick={() => setStakeAmount(balance)}>max</p>
+                <p onClick={() => setStakeAmount(phgxBalance)}>max</p>
               </div>
 
               <div
                 className="stake__btn"
-                style={{ opacity: isConnected ? selectedPlan && stakeAmount >= parseFloat(selectedPlan?.minimalAmount) && stakeAmount <= balance ? 1 : 0.4 : 1}}
+                style={{ opacity: isConnected ? selectedPlan && stakeAmount >= parseFloat(selectedPlan?.minimalAmount) && stakeAmount <= phgxBalance ? 1 : 0.4 : 1}}
               >
                 <Button text={isConnected ? "stake" : "connect wallet"} onClick={handleStake}/>
               </div>
