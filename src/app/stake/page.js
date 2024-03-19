@@ -142,7 +142,7 @@ function Stake() {
           account: account,
         });
         const planId = Number(BigInt(stakerInfo['planId']));
-        const stakedAmount = formatEther(stakerInfo['amount']);
+        const stakedAmount = parseFloat(formatEther(stakerInfo['amount']));
         unPlans.push({
           label: plans[planId].label,
           duration: `${stakerInfo['timeRemaining']}`,
@@ -182,7 +182,7 @@ function Stake() {
         functionName: "allowance",
         args: [account ?? `0x${""}`, constants.stakingContractAddress],
       });
-      if (allowance !== undefined && Number(BigInt(allowance)) < +stakingAmount) {
+      if (allowance !== undefined || Number(BigInt(allowance)) < +stakingAmount) {
         const approveTx = await writeContract({
           abi: tokenContractAbi,
           address: constants.tokenContractAddress,
@@ -242,7 +242,6 @@ function Stake() {
         await waitForTransaction({
           hash: unstakeTx.hash,
         })
-        setPhgxBalance(prevState => prevState+unstakeSelectedPlan?.stake+unstakeSelectedPlan?.reward);
         fetchPools();
       }
       setStakeAmount(0);
