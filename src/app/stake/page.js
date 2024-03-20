@@ -15,10 +15,12 @@ import { formatEther, parseEther } from "viem";
 import tokenContractAbi from "@/abi/PHGXToken.json";
 import stakingContractAbi from "@/abi/PHGXStaking.json";
 import { constants } from "@/const";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { config } from "@/providers/config";
+import { sepolia } from '@wagmi/core/chains'
 
 function Stake() {
+  const { wallets } = useWallets();
   const { account, isConnected, balance } = useActiveWagmi();
   const [phgxBalance, setPhgxBalance] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -164,6 +166,7 @@ function Stake() {
 
   useEffect(() => {
     if (isConnected) {
+      wallets[0].switchChain(sepolia.id);
       fetchPools();
       setPhgxBalance(balance);
     } else {
