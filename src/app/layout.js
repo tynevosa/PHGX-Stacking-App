@@ -40,6 +40,7 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${capriola.variable} ${reggeaOne.variable} ${trebuc.variable}  ${unlock.variable}`}
     >
       <Web3Providers>

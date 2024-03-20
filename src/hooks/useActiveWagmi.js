@@ -1,9 +1,10 @@
 import {
   useAccount,
-  useNetwork,
+  useConfig,
   useBalance,
   usePublicClient,
   useWalletClient,
+  useChainId,
 } from "wagmi";
 import { constants } from "@/const";
 
@@ -13,10 +14,10 @@ const useActiveWagmi = () => {
     address: address,
     token: constants.tokenContractAddress, 
   })
-  const { chain, chains } = useNetwork();
+  const { chain, chains } = useConfig();
   const provider = usePublicClient();
   const { data: signer } = useWalletClient();
-  const chainId = chain?.id;
+  const chainId = useChainId();
   const library = provider;
 
   return {

@@ -10,13 +10,13 @@ import Layout from "@/components/layout/Layout";
 import Layout2 from "@/components/layout/Layout2";
 import Image from "next/image";
 import useActiveWagmi from "@/hooks/useActiveWagmi";
-import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { writeContract, readContract, waitForTransaction } from "@wagmi/core";
-import { useContractWrite } from "wagmi";
+import { writeContract, readContract, waitForTransactionReceipt } from "@wagmi/core";
 import { formatEther, parseEther } from "viem";
 import tokenContractAbi from "@/abi/PHGXToken.json";
 import stakingContractAbi from "@/abi/PHGXStaking.json";
 import { constants } from "@/const";
+import { usePrivy } from "@privy-io/react-auth";
+import { config } from "@/providers/config";
 
 function Stake() {
   const { account, isConnected, balance } = useActiveWagmi();
@@ -28,8 +28,7 @@ function Stake() {
   const [unstakingPlans, setUnstakingPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [unstakeSelectedPlan, setUnstakeSelectedPlan] = useState(null);
-
-  const { openConnectModal } = useConnectModal();
+  const { connectWallet } = usePrivy();
 
   const Modal = ({ toggleModal, selectedPlan }) => {
     const handleDurationClick = (plan) => {
@@ -108,16 +107,19 @@ function Stake() {
   };
 
   const fetchPools = async () => {
-    setUnstakingPlans([])
+    setStakingPlans([]);
+    setSelectedPlan(null);
+    setUnstakingPlans([]);
+    setUnstakeSelectedPlan(null);
     try {
-      const planCount = await readContract({
+      const planCount = await readContract(config, {
         abi: stakingContractAbi,
         address: constants.stakingContractAddress,
         functionName: "planCount",
       });
       let plans = [];
       for( let i=0; i<planCount; i++ ) {
-        const plan = await readContract({
+        const plan = await readContract(config, {
           abi: stakingContractAbi,
           address: constants.stakingContractAddress,
           functionName: "plans",
@@ -135,7 +137,7 @@ function Stake() {
       setSelectedPlan(plans[0]);
       try {
         let unPlans = [];
-        const stakerInfo = await readContract({
+        const stakerInfo = await readContract(config, {
           abi: stakingContractAbi,
           address: constants.stakingContractAddress,
           functionName: "getStaker",
@@ -156,7 +158,7 @@ function Stake() {
         // console.error("fetching staker information: ", error);
       }
     } catch (error) {
-      console.error("fetching Pools: ", error);
+      // console.error("fetching Pools: ", error);
     }
   };
 
@@ -165,58 +167,58 @@ function Stake() {
       fetchPools();
       setPhgxBalance(balance);
     } else {
-      // openConnectModal();
+      // connectWallet();
     }
-  }, [account, isConnected]);
+  }, [account, isConnected, balance]);
 
   const handleStake = async () => {
     if (stakeAmount < selectedPlan?.minimalAmount) return;
     const stakingAmount = stakeAmount;
     setStakeAmount(0);
     if (!isConnected) {
-      openConnectModal();
+      connectWallet();
     } else {
-      const allowance = await readContract({
+      const allowance = await readContract(config, {
         address: constants.tokenContractAddress,
         abi: tokenContractAbi,
         functionName: "allowance",
         args: [account ?? `0x${""}`, constants.stakingContractAddress],
       });
       if (allowance !== undefined || Number(BigInt(allowance)) < +stakingAmount) {
-        const approveTx = await writeContract({
+        const approveTx = await writeContract(config, {
           abi: tokenContractAbi,
           address: constants.tokenContractAddress,
           functionName: "approve",
           args: [constants.stakingContractAddress, parseEther(stakingAmount)],
         });
-        if (approveTx.hash) {
-          await waitForTransaction({
-            hash: approveTx.hash,
+        if (approveTx) {
+          const transactionReceipt = await waitForTransactionReceipt(config, {
+            hash: approveTx,
           })
-          const stakeTx = await writeContract({
+          const stakeTx = await writeContract(config, {
             address: constants.stakingContractAddress,
             abi: stakingContractAbi,
             functionName: "stake",
             args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
           })
-          if (stakeTx.hash) {
-            await waitForTransaction({
-              hash: stakeTx.hash,
+          if (stakeTx) {
+            await waitForTransactionReceipt(config, {
+              hash: stakeTx,
             })
             setPhgxBalance(prevState => prevState-stakingAmount);
             fetchPools();
           }
         }
       } else {
-        const stakeTx = await writeContract({
+        const stakeTx = await writeContract(config, {
           address: constants.stakingContractAddress,
           abi: stakingContractAbi,
           functionName: "stake",
           args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
         })
-        if (stakeTx.hash) {
-          await waitForTransaction({
-            hash: stakeTx.hash,
+        if (stakeTx) {
+          const transactionReceipt = await waitForTransactionReceipt(config, {
+            hash: stakeTx,
           })
           setPhgxBalance(prevState => prevState-stakingAmount);
           fetchPools();
@@ -230,17 +232,17 @@ function Stake() {
     if (stakeAmount != unstakeSelectedPlan?.stake) return;
     setStakeAmount(0);
     if (!isConnected) {
-      openConnectModal();
+      connectWallet();
     } else {
       // unstake
-      const unstakeTx = await writeContract({
+      const unstakeTx = await writeContract(config, {
         abi: stakingContractAbi,
         address: constants.stakingContractAddress,
         functionName: "unstake",
       });
-      if (unstakeTx.hash) {
-        await waitForTransaction({
-          hash: unstakeTx.hash,
+      if (unstakeTx) {
+        await waitForTransactionReceipt(config, {
+          hash: unstakeTx,
         })
         fetchPools();
       }
