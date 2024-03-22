@@ -18,6 +18,7 @@ import { constants } from "@/const";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { config } from "@/providers/config";
 import { sepolia } from '@wagmi/core/chains'
+import toast, { Toaster } from 'react-hot-toast';
 
 function Stake() {
   const { wallets } = useWallets();
@@ -168,7 +169,7 @@ function Stake() {
     if (isConnected) {
       wallets[0].switchChain(sepolia.id);
       fetchPools();
-      setPhgxBalance(balance);
+      setPhgxBalance(parseFloat(balance).toFixed(1));
     } else {
       // connectWallet();
     }
@@ -188,40 +189,64 @@ function Stake() {
         args: [account ?? `0x${""}`, constants.stakingContractAddress],
       });
       if (allowance !== undefined || Number(BigInt(allowance)) < +stakingAmount) {
-        const approveTx = await writeContract(config, {
+        const approveTx = await toast.promise(writeContract(config, {
           abi: tokenContractAbi,
           address: constants.tokenContractAddress,
           functionName: "approve",
           args: [constants.stakingContractAddress, parseEther(stakingAmount)],
-        });
+        }),{
+          loading: 'Approving...',
+          success: <b>Approved!</b>,
+          error: <b>Not approved.</b>,
+        })
         if (approveTx) {
-          const transactionReceipt = await waitForTransactionReceipt(config, {
+          await toast.promise(waitForTransactionReceipt(config, {
             hash: approveTx,
+          }),{
+            loading: 'Confirming transaction...',
+            success: <b>Confirmed!</b>,
+            error: <b>Not confirmed.</b>,
           })
-          const stakeTx = await writeContract(config, {
+          const stakeTx = await toast.promise(writeContract(config, {
             address: constants.stakingContractAddress,
             abi: stakingContractAbi,
             functionName: "stake",
             args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
+          }),{
+            loading: 'Stacking...',
+            success: <b>Approved!</b>,
+            error: <b>Not approved.</b>,
           })
           if (stakeTx) {
-            await waitForTransactionReceipt(config, {
+            await toast.promise(waitForTransactionReceipt(config, {
               hash: stakeTx,
+            }),{
+              loading: 'Confirming transaction...',
+              success: <b>Confirmed!</b>,
+              error: <b>Not confirmed.</b>,
             })
             setPhgxBalance(prevState => prevState-stakingAmount);
             fetchPools();
           }
         }
       } else {
-        const stakeTx = await writeContract(config, {
+        const stakeTx = await toast.promise(writeContract(config, {
           address: constants.stakingContractAddress,
           abi: stakingContractAbi,
           functionName: "stake",
           args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
+        }),{
+          loading: 'Stacking...',
+          success: <b>Approved!</b>,
+          error: <b>Not approved.</b>,
         })
         if (stakeTx) {
-          const transactionReceipt = await waitForTransactionReceipt(config, {
+          await toast.promise(waitForTransactionReceipt(config, {
             hash: stakeTx,
+          }),{
+            loading: 'Confirming transaction...',
+            success: <b>Confirmed!</b>,
+            error: <b>Not confirmed.</b>,
           })
           setPhgxBalance(prevState => prevState-stakingAmount);
           fetchPools();
@@ -238,14 +263,22 @@ function Stake() {
       connectWallet();
     } else {
       // unstake
-      const unstakeTx = await writeContract(config, {
+      const unstakeTx = await toast.promise(writeContract(config, {
         abi: stakingContractAbi,
         address: constants.stakingContractAddress,
         functionName: "unstake",
+      }),{
+        loading: 'Unstaking...',
+        success: <b>Approved!</b>,
+        error: <b>Not approved.</b>,
       });
       if (unstakeTx) {
-        await waitForTransactionReceipt(config, {
+        await toast.promise(waitForTransactionReceipt(config, {
           hash: unstakeTx,
+        }),{
+          loading: 'Confirming transaction...',
+          success: <b>Confirmed!</b>,
+          error: <b>Not confirmed.</b>,
         })
         fetchPools();
       }
@@ -451,6 +484,7 @@ function Stake() {
         </div>
         <div className="copy__right">© New Phoenix LLC 2024</div>
       </div>
+      <Toaster />
     </Layout2>
   );
 }
