@@ -21,7 +21,7 @@ import { sepolia } from '@wagmi/core/chains'
 import toast, { Toaster } from 'react-hot-toast';
 
 function Stake() {
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated, login, logout } = usePrivy();
   const { wallets } = useWallets();
   const { account, isConnected, balance } = useActiveWagmi();
   const [phgxBalance, setPhgxBalance] = useState(0);
@@ -32,6 +32,7 @@ function Stake() {
   const [unstakingPlans, setUnstakingPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [unstakeSelectedPlan, setUnstakeSelectedPlan] = useState(null);
+  const [unlockingDuration, setUnlockingDuration] = useState(0);
 
   const Modal = ({ toggleModal, selectedPlan }) => {
     const handleDurationClick = (plan) => {
@@ -143,20 +144,25 @@ function Stake() {
         const stakerInfo = await readContract(config, {
           abi: stakingContractAbi,
           address: constants.stakingContractAddress,
-          functionName: "getStaker",
+          functionName: "getStakers",
           account: account,
         });
-        const planId = Number(BigInt(stakerInfo['planId']));
-        const stakedAmount = parseFloat(formatEther(stakerInfo['amount']));
-        unPlans.push({
-          label: plans[planId].label,
-          duration: `${stakerInfo['timeRemaining']}`,
-          stake: `${stakedAmount}`,
-          reward: `${stakedAmount*plans[planId].apy/100}`,
-        });
-        setUnstakingPlans(unPlans);
-        setUnstakeSelectedPlan(unPlans[0]);
-        countdownTimer(unPlans[0].duration);
+        console.log("stakerInfo", stakerInfo);
+        for( let i=0; i<stakerInfo.length; i++) {
+          const planId = Number(BigInt(stakerInfo[i]['planId']));
+          const stakedAmount = parseFloat(formatEther(stakerInfo[i]['amount']));
+          unPlans.push({
+            id: i,
+            label: plans[planId].label,
+            unlockingTime: `${stakerInfo[i]['unlockingTime']}`,
+            stake: `${stakedAmount}`,
+            reward: `${stakedAmount*plans[planId].apy/100}`,
+          });
+        }
+        if(unPlans.length){
+          setUnstakingPlans(unPlans);
+          setUnstakeSelectedPlan(unPlans[0]);
+        }
       } catch (error) {
         // console.error("fetching staker information: ", error);
       }
@@ -176,12 +182,15 @@ function Stake() {
   }, [account, isConnected, balance]);
 
   const handleStake = async () => {
-    if (stakeAmount < selectedPlan?.minimalAmount) return;
-    const stakingAmount = stakeAmount;
-    setStakeAmount(0);
     if (!isConnected) {
       login();
     } else {
+      if (stakeAmount < selectedPlan?.minimalAmount) {
+        toast.error(`Minimal stake amount is ${selectedPlan?.minimalAmount} PHGX`);
+        return;
+      };
+      const stakingAmount = stakeAmount;
+      setStakeAmount(0);
       const allowance = await readContract(config, {
         address: constants.tokenContractAddress,
         abi: tokenContractAbi,
@@ -257,16 +266,20 @@ function Stake() {
   }
 
   const handleUnstake = async () => {
-    if (stakeAmount != unstakeSelectedPlan?.stake) return;
-    setStakeAmount(0);
     if (!isConnected) {
       login();
     } else {
+      if (stakeAmount != unstakeSelectedPlan?.stake) {
+        toast.error('Unstake full amount.');
+        return;
+      }
+      setStakeAmount(0);
       // unstake
       const unstakeTx = await toast.promise(writeContract(config, {
         abi: stakingContractAbi,
         address: constants.stakingContractAddress,
         functionName: "unstake",
+        args: [unstakeSelectedPlan.id],
       }),{
         loading: 'Unstaking...',
         success: <b>Approved!</b>,
@@ -286,20 +299,20 @@ function Stake() {
     }
   }
 
-  function countdownTimer(seconds) {
-    if(seconds > 0){
+  useEffect(() => {
+    setUnlockingDuration(0);
+    let seconds = unstakeSelectedPlan?.unlockingTime - Math.floor(Date.now() / 1000);
+    if (seconds > 0) {
       const unstakeInterval = setInterval(() => {
         seconds--;
-        setUnstakeSelectedPlan(prevState => ({
-          ...prevState,
-          duration: seconds
-        }));
+        setUnlockingDuration(seconds);
         if (seconds === 0) {
           clearInterval(unstakeInterval);
         }
       }, 1000);
+      return () => clearInterval(unstakeInterval);
     }
-  }
+}, [unstakeSelectedPlan]);
 
   return (
     <Layout2>
@@ -435,7 +448,7 @@ function Stake() {
                     Unlocking in:{" "}
                     <p className="duration">
                       {" "}
-                      {unstakeSelectedPlan.duration}{"s"}
+                      {unlockingDuration}{"s"}
                     </p>
                   </p>
 
@@ -471,9 +484,7 @@ function Stake() {
 
               <div
                 className="stake__btn"
-                style={{
-                  opacity: isConnected ? unstakeSelectedPlan && unstakeSelectedPlan?.duration=='0' && unstakeSelectedPlan?.stake == stakeAmount ? 1 : 0.4 : 1,
-                }}
+                // style={{ opacity: isConnected ? unstakeSelectedPlan && unlockingDuration==0 && unstakeSelectedPlan?.stake == stakeAmount ? 1 : 0.4 : 1, }}
               >
                 <Button
                   text={isConnected ? "withdraw" : "connect wallet"} onClick={handleUnstake}

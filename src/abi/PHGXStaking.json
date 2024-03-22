@@ -339,7 +339,7 @@
   },
   {
     "inputs": [],
-    "name": "getStaker",
+    "name": "getStakers",
     "outputs": [
       {
         "components": [
@@ -360,13 +360,13 @@
           },
           {
             "internalType": "uint256",
-            "name": "timeRemaining",
+            "name": "unlockingTime",
             "type": "uint256"
           }
         ],
-        "internalType": "struct StakingPHGX.StakerInfo",
+        "internalType": "struct StakingPHGX.StakerInfo[]",
         "name": "",
-        "type": "tuple"
+        "type": "tuple[]"
       }
     ],
     "stateMutability": "view",
@@ -496,6 +496,11 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "name": "stakers",
@@ -631,7 +636,13 @@
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
     "name": "unstake",
     "outputs": [],
     "stateMutability": "payable",
