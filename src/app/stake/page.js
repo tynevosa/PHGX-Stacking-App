@@ -21,6 +21,7 @@ import { sepolia } from '@wagmi/core/chains'
 import toast, { Toaster } from 'react-hot-toast';
 
 function Stake() {
+  const { ready, authenticated, login } = usePrivy();
   const { wallets } = useWallets();
   const { account, isConnected, balance } = useActiveWagmi();
   const [phgxBalance, setPhgxBalance] = useState(0);
@@ -31,7 +32,6 @@ function Stake() {
   const [unstakingPlans, setUnstakingPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [unstakeSelectedPlan, setUnstakeSelectedPlan] = useState(null);
-  const { connectWallet } = usePrivy();
 
   const Modal = ({ toggleModal, selectedPlan }) => {
     const handleDurationClick = (plan) => {
@@ -171,7 +171,7 @@ function Stake() {
       fetchPools();
       setPhgxBalance(parseFloat(balance).toFixed(1));
     } else {
-      // connectWallet();
+      // login();
     }
   }, [account, isConnected, balance]);
 
@@ -180,7 +180,7 @@ function Stake() {
     const stakingAmount = stakeAmount;
     setStakeAmount(0);
     if (!isConnected) {
-      connectWallet();
+      login();
     } else {
       const allowance = await readContract(config, {
         address: constants.tokenContractAddress,
@@ -260,7 +260,7 @@ function Stake() {
     if (stakeAmount != unstakeSelectedPlan?.stake) return;
     setStakeAmount(0);
     if (!isConnected) {
-      connectWallet();
+      login();
     } else {
       // unstake
       const unstakeTx = await toast.promise(writeContract(config, {

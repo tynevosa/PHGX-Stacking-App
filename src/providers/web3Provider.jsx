@@ -15,10 +15,11 @@ const Web3Providers = ({ children }) => {
         config={{
           appearance: {
             // Defaults to true
+            theme: 'dark',
             defaultChain: sepolia, 
             supportedChains: [mainnet, sepolia] 
           },
-          loginMethods: ['wallet','email']
+          loginMethods: ['wallet','email','google','farcaster']
         }}
       >
         <QueryClientProvider client={queryClient}>
