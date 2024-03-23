@@ -21,7 +21,7 @@ import { sepolia } from '@wagmi/core/chains'
 import toast, { Toaster } from 'react-hot-toast';
 
 function Stake() {
-  const { ready, authenticated, login, logout } = usePrivy();
+  const { ready, authenticated, login, connectWallet } = usePrivy();
   const { wallets } = useWallets();
   const { account, isConnected, balance } = useActiveWagmi();
   const [phgxBalance, setPhgxBalance] = useState(0);
@@ -183,7 +183,11 @@ function Stake() {
 
   const handleStake = async () => {
     if (!isConnected) {
-      login();
+      if(!authenticated){
+        login();
+      } else {
+        connectWallet();
+      }
     } else {
       if (stakeAmount < selectedPlan?.minimalAmount) {
         toast.error(`Minimal stake amount is ${selectedPlan?.minimalAmount} PHGX`);
@@ -267,7 +271,11 @@ function Stake() {
 
   const handleUnstake = async () => {
     if (!isConnected) {
-      login();
+      if(!authenticated){
+        login();
+      } else {
+        connectWallet();
+      }
     } else {
       if (stakeAmount != unstakeSelectedPlan?.stake) {
         toast.error('Unstake full amount.');
