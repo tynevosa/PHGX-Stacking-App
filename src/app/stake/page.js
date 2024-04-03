@@ -110,62 +110,41 @@ function Stake() {
     }
   };
 
-  const fetchPools = async () => {
-    setStakingPlans([]);
-    setSelectedPlan(null);
-    setUnstakingPlans([]);
-    setUnstakeSelectedPlan(null);
+  const updatePlans = async () => {
     try {
-      const planCount = await readContract(config, {
+      let plans = await readContract(config, {
         abi: stakingContractAbi,
         address: constants.stakingContractAddress,
-        functionName: "planCount",
+        functionName: "getPlans",
       });
-      let plans = [];
-      for( let i=0; i<planCount; i++ ) {
-        const plan = await readContract(config, {
-          abi: stakingContractAbi,
-          address: constants.stakingContractAddress,
-          functionName: "plans",
-          args: [BigInt(i)],
-        });
-        plans.push({
-          id: i,
-          label: Number(BigInt(plan[1])) ? `${plan[1]} seconds lock up` : 'Flexible',
-          duration: `${Number(BigInt(plan[1])) ? plan[1] : 'Anytime'}`,
-          apy: `${plan[0]}`,
-          minimalAmount: plan[2]
-        });
-      }
+      plans = plans.map((plan, index) => ({
+        id: index,
+        label: Number(plan['unlockPeriod']) ? `${plan['unlockPeriod']} seconds lock up` : 'Flexible',
+        duration: `${Number(plan['unlockPeriod']) ? plan['unlockPeriod'] : 'Anytime'}`,
+        apy: `${plan['rewardRate']}`,
+        minimalAmount: plan['minimalAmount']
+      }));
       setStakingPlans(plans);
       setSelectedPlan(plans[0]);
-      try {
-        let unPlans = [];
-        const stakerInfo = await readContract(config, {
-          abi: stakingContractAbi,
-          address: constants.stakingContractAddress,
-          functionName: "getStakers",
-          account: account,
-        });
-        console.log("stakerInfo", stakerInfo);
-        for( let i=0; i<stakerInfo.length; i++) {
-          const planId = Number(BigInt(stakerInfo[i]['planId']));
-          const stakedAmount = parseFloat(formatEther(stakerInfo[i]['amount']));
-          unPlans.push({
-            id: i,
-            label: plans[planId].label,
-            unlockingTime: `${stakerInfo[i]['unlockingTime']}`,
-            stake: `${stakedAmount}`,
-            reward: `${stakedAmount*plans[planId].apy/100}`,
-          });
-        }
-        if(unPlans.length){
-          setUnstakingPlans(unPlans);
-          setUnstakeSelectedPlan(unPlans[0]);
-        }
-      } catch (error) {
-        // console.error("fetching staker information: ", error);
-      }
+      let unPlans = await readContract(config, {
+        abi: stakingContractAbi,
+        address: constants.stakingContractAddress,
+        functionName: "getStakers",
+        account: account,
+      });
+      unPlans = unPlans.map((unPlan, index) => {
+        const planId = Number(unPlan['planId']);
+        const stakedAmount = parseFloat(formatEther(unPlan['amount']));
+        return {
+          id: index,
+          label: plans[planId].label,
+          unlockingTime: `${unPlan['unlockingTime']}`,
+          stake: `${stakedAmount}`,
+          reward: `${stakedAmount*plans[planId].apy/100}`,
+        };
+      })
+      setUnstakingPlans(unPlans);
+      setUnstakeSelectedPlan(unPlans[0]);
     } catch (error) {
       // console.error("fetching Pools: ", error);
     }
@@ -174,7 +153,7 @@ function Stake() {
   useEffect(() => {
     if (isConnected) {
       wallets[0].switchChain(sepolia.id);
-      fetchPools();
+      updatePlans();
       setPhgxBalance(parseFloat(balance).toFixed(1));
     } else {
       // login();
@@ -189,24 +168,25 @@ function Stake() {
         connectWallet();
       }
     } else {
+      // check if user set higher amount of stake than minimal one of selected staking plan
       if (stakeAmount < selectedPlan?.minimalAmount) {
         toast.error(`Minimal stake amount is ${selectedPlan?.minimalAmount} PHGX`);
         return;
       };
-      const stakingAmount = stakeAmount;
-      setStakeAmount(0);
+      // check allowence of the token transfer to smart contract
       const allowance = await readContract(config, {
         address: constants.tokenContractAddress,
         abi: tokenContractAbi,
         functionName: "allowance",
         args: [account ?? `0x${""}`, constants.stakingContractAddress],
       });
-      if (allowance !== undefined || Number(BigInt(allowance)) < +stakingAmount) {
+      // if not allowed to transfer token, allow it
+      if (allowance !== undefined || Number(allowance) < +stakeAmount) {
         const approveTx = await toast.promise(writeContract(config, {
           abi: tokenContractAbi,
           address: constants.tokenContractAddress,
           functionName: "approve",
-          args: [constants.stakingContractAddress, parseEther(stakingAmount)],
+          args: [constants.stakingContractAddress, parseEther(stakeAmount)],
         }),{
           loading: 'Approving...',
           success: <b>Approved!</b>,
@@ -220,52 +200,33 @@ function Stake() {
             success: <b>Confirmed!</b>,
             error: <b>Not confirmed.</b>,
           })
-          const stakeTx = await toast.promise(writeContract(config, {
-            address: constants.stakingContractAddress,
-            abi: stakingContractAbi,
-            functionName: "stake",
-            args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
-          }),{
-            loading: 'Stacking...',
-            success: <b>Approved!</b>,
-            error: <b>Not approved.</b>,
-          })
-          if (stakeTx) {
-            await toast.promise(waitForTransactionReceipt(config, {
-              hash: stakeTx,
-            }),{
-              loading: 'Confirming transaction...',
-              success: <b>Confirmed!</b>,
-              error: <b>Not confirmed.</b>,
-            })
-            setPhgxBalance(prevState => prevState-stakingAmount);
-            fetchPools();
-          }
-        }
-      } else {
-        const stakeTx = await toast.promise(writeContract(config, {
-          address: constants.stakingContractAddress,
-          abi: stakingContractAbi,
-          functionName: "stake",
-          args: [parseEther(stakingAmount), BigInt(selectedPlan.id)],
-        }),{
-          loading: 'Stacking...',
-          success: <b>Approved!</b>,
-          error: <b>Not approved.</b>,
-        })
-        if (stakeTx) {
-          await toast.promise(waitForTransactionReceipt(config, {
-            hash: stakeTx,
-          }),{
-            loading: 'Confirming transaction...',
-            success: <b>Confirmed!</b>,
-            error: <b>Not confirmed.</b>,
-          })
-          setPhgxBalance(prevState => prevState-stakingAmount);
-          fetchPools();
         }
       }
-      setStakeAmount(0);
+      // call stake function with amount & selected staking plan id
+      const stakeTx = await toast.promise(writeContract(config, {
+        address: constants.stakingContractAddress,
+        abi: stakingContractAbi,
+        functionName: "stake",
+        args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
+      }),{
+        loading: 'Stacking...',
+        success: <b>Approved!</b>,
+        error: <b>Not approved.</b>,
+      })
+      // if transaction created, wait it until confirmed
+      if (stakeTx) {
+        await toast.promise(waitForTransactionReceipt(config, {
+          hash: stakeTx,
+        }),{
+          loading: 'Confirming transaction...',
+          success: <b>Confirmed!</b>,
+          error: <b>Not confirmed.</b>,
+        })
+        // after transaction confirmed, update status of staker
+        setPhgxBalance(prevState => prevState-stakeAmount);
+        setStakeAmount(0);
+        updatePlans();
+      }
     }
   }
 
@@ -277,12 +238,12 @@ function Stake() {
         connectWallet();
       }
     } else {
+      // user has to unstake full amount of the plan
       if (stakeAmount != unstakeSelectedPlan?.stake) {
         toast.error('Unstake full amount.');
         return;
       }
-      setStakeAmount(0);
-      // unstake
+      // call unstake function with selected unstake plan
       const unstakeTx = await toast.promise(writeContract(config, {
         abi: stakingContractAbi,
         address: constants.stakingContractAddress,
@@ -293,6 +254,7 @@ function Stake() {
         success: <b>Approved!</b>,
         error: <b>Not approved.</b>,
       });
+      // if transaction created, wait it until confirmed
       if (unstakeTx) {
         await toast.promise(waitForTransactionReceipt(config, {
           hash: unstakeTx,
@@ -301,9 +263,10 @@ function Stake() {
           success: <b>Confirmed!</b>,
           error: <b>Not confirmed.</b>,
         })
-        fetchPools();
+        // after transaction confirmed, update status of staker
+        setStakeAmount(0);
+        updatePlans();
       }
-      setStakeAmount(0);
     }
   }
 

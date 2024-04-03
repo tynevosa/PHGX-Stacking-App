@@ -339,6 +339,36 @@
   },
   {
     "inputs": [],
+    "name": "getPlans",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "rewardRate",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "unlockPeriod",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "minimalAmount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct StakingPHGX.Plan[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getStakers",
     "outputs": [
       {
