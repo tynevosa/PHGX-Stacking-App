@@ -70,8 +70,8 @@ const useActiveWagmi = () => {
   // Approve function
   const { writeContractAsync: approve } = useWriteContract({
     mutation: {
-      onSuccess(data) {
-        toast.promise(waitForTransactionReceipt({ hash: data.hash }), {
+      async onSuccess(data) {
+        await toast.promise(waitForTransactionReceipt({ hash: data.hash }), {
           loading: 'Token allowance...',
           success: 'Done!',
           error: 'Failed!',
