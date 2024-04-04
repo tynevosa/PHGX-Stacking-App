@@ -2,7 +2,7 @@
 
 // import { ethers } from "ethers";
 import "./Stake.css";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { Arrow } from "@/assets/images";
 import Button from "@/components/button/Button";
 import ButtonContainer from "@/components/button/ButtonContainer";
@@ -10,31 +10,32 @@ import Layout from "@/components/layout/Layout";
 import Layout2 from "@/components/layout/Layout2";
 import Image from "next/image";
 import useActiveWagmi from "@/hooks/useActiveWagmi";
-import { writeContract, readContract, waitForTransactionReceipt } from "@wagmi/core";
-import { formatEther, parseEther } from "viem";
-import tokenContractAbi from "@/abi/PHGXToken.json";
-import stakingContractAbi from "@/abi/PHGXStaking.json";
-import { constants } from "@/const";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { config } from "@/providers/config";
 import { sepolia } from '@wagmi/core/chains'
-import toast, { Toaster } from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
 
 function Stake() {
   const { ready, authenticated, login, connectWallet } = usePrivy();
   const { wallets } = useWallets();
-  const { account, isConnected, balance } = useActiveWagmi();
+  const { 
+    account,
+    isConnected,
+    balance,
+    handleStake,
+    handleUnstake,
+    plans,
+    stakingPlans,
+    handleFetchPlans
+  } = useActiveWagmi();
   const [phgxBalance, setPhgxBalance] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [stakeAmount, setStakeAmount] = useState();
   const [isStakeSelected, setIsStakeSelected] = useState(true);
-  const [stakingPlans, setStakingPlans] = useState([]);
-  const [unstakingPlans, setUnstakingPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [unstakeSelectedPlan, setUnstakeSelectedPlan] = useState(null);
+  const [selectedStakingPlan, setSelectedStakingPlan] = useState(null);
+  const [stakeAmount, setStakeAmount] = useState('');
   const [unlockingDuration, setUnlockingDuration] = useState(0);
 
-  const Modal = ({ toggleModal, selectedPlan }) => {
+  const Modal = useCallback(({ toggleModal, selectedPlan }) => {
     const handleDurationClick = (plan) => {
       toggleModal(plan);
     };
@@ -42,7 +43,7 @@ function Stake() {
     return (
       <div className="modal">
         <div className="modal__content">
-          {stakingPlans.map((plan, index) => {
+          {plans.map((plan, index) => {
             return (
               <div
                 key={index}
@@ -63,9 +64,9 @@ function Stake() {
         </div>
       </div>
     );
-  };
+  }, [plans]);
 
-  const UnstakeModal = ({ toggleModal, selectedPlan }) => {
+  const UnstakeModal = useCallback(({ toggleModal, selectedPlan }) => {
     const handleDurationClick = (duration) => {
       toggleModal(duration);
     };
@@ -73,7 +74,7 @@ function Stake() {
     return (
       <div className="modal">
         <div className="modal__content">
-          {unstakingPlans.map((plan, index) => {
+          {stakingPlans.map((plan, index) => {
             return (
               <div
                 key={index}
@@ -94,7 +95,7 @@ function Stake() {
         </div>
       </div>
     );
-  };
+  }, [stakingPlans]);
   
   const toggleModal = (plan) => {
     setIsModalOpen(!isModalOpen);
@@ -106,173 +107,56 @@ function Stake() {
   const toggleUnstakeModal = (plan) => {
     setIsModalOpen(!isModalOpen);
     if (plan) {
-      setUnstakeSelectedPlan(plan);
+      setSelectedStakingPlan(plan);
     }
   };
 
-  const updatePlans = async () => {
-    try {
-      let plans = await readContract(config, {
-        abi: stakingContractAbi,
-        address: constants.stakingContractAddress,
-        functionName: "getPlans",
-      });
-      plans = plans.map((plan, index) => ({
-        id: index,
-        label: Number(plan['unlockPeriod']) ? `${plan['unlockPeriod']} seconds lock up` : 'Flexible',
-        duration: `${Number(plan['unlockPeriod']) ? plan['unlockPeriod'] : 'Anytime'}`,
-        apy: `${plan['rewardRate']}`,
-        minimalAmount: plan['minimalAmount']
-      }));
-      setStakingPlans(plans);
-      setSelectedPlan(plans[0]);
-      let unPlans = await readContract(config, {
-        abi: stakingContractAbi,
-        address: constants.stakingContractAddress,
-        functionName: "getStakers",
-        account: account,
-      });
-      unPlans = unPlans.map((unPlan, index) => {
-        const planId = Number(unPlan['planId']);
-        const stakedAmount = parseFloat(formatEther(unPlan['amount']));
-        return {
-          id: index,
-          label: plans[planId].label,
-          unlockingTime: `${unPlan['unlockingTime']}`,
-          stake: `${stakedAmount}`,
-          reward: `${stakedAmount*plans[planId].apy/100}`,
-        };
-      })
-      setUnstakingPlans(unPlans);
-      setUnstakeSelectedPlan(unPlans[0]);
-    } catch (error) {
-      // console.error("fetching Pools: ", error);
+  useEffect(() => {
+    if(plans.length) {
+      setSelectedPlan(plans[0])
     }
-  };
+    if(stakingPlans.length) {
+      setSelectedStakingPlan(stakingPlans[0])
+    }
+  }, [plans, stakingPlans])
 
   useEffect(() => {
     if (isConnected) {
       wallets[0].switchChain(sepolia.id);
-      updatePlans();
+      handleFetchPlans();
       setPhgxBalance(parseFloat(balance).toFixed(1));
-    } else {
-      // login();
     }
   }, [account, isConnected, balance]);
 
-  const handleStake = async () => {
-    if (!isConnected) {
-      if(!authenticated){
-        login();
-      } else {
-        connectWallet();
-      }
-    } else {
-      // check if user set higher amount of stake than minimal one of selected staking plan
-      if (stakeAmount < selectedPlan?.minimalAmount) {
-        toast.error(`Minimal stake amount is ${selectedPlan?.minimalAmount} PHGX`);
-        return;
-      };
-      // check allowence of the token transfer to smart contract
-      const allowance = await readContract(config, {
-        address: constants.tokenContractAddress,
-        abi: tokenContractAbi,
-        functionName: "allowance",
-        args: [account ?? `0x${""}`, constants.stakingContractAddress],
-      });
-      // if not allowed to transfer token, allow it
-      if (allowance !== undefined || Number(allowance) < +stakeAmount) {
-        const approveTx = await toast.promise(writeContract(config, {
-          abi: tokenContractAbi,
-          address: constants.tokenContractAddress,
-          functionName: "approve",
-          args: [constants.stakingContractAddress, parseEther(stakeAmount)],
-        }),{
-          loading: 'Approving...',
-          success: <b>Approved!</b>,
-          error: <b>Not approved.</b>,
-        })
-        if (approveTx) {
-          await toast.promise(waitForTransactionReceipt(config, {
-            hash: approveTx,
-          }),{
-            loading: 'Confirming transaction...',
-            success: <b>Confirmed!</b>,
-            error: <b>Not confirmed.</b>,
-          })
-        }
-      }
-      // call stake function with amount & selected staking plan id
-      const stakeTx = await toast.promise(writeContract(config, {
-        address: constants.stakingContractAddress,
-        abi: stakingContractAbi,
-        functionName: "stake",
-        args: [parseEther(stakeAmount), BigInt(selectedPlan.id)],
-      }),{
-        loading: 'Stacking...',
-        success: <b>Approved!</b>,
-        error: <b>Not approved.</b>,
-      })
-      // if transaction created, wait it until confirmed
-      if (stakeTx) {
-        await toast.promise(waitForTransactionReceipt(config, {
-          hash: stakeTx,
-        }),{
-          loading: 'Confirming transaction...',
-          success: <b>Confirmed!</b>,
-          error: <b>Not confirmed.</b>,
-        })
-        // after transaction confirmed, update status of staker
-        setPhgxBalance(prevState => prevState-stakeAmount);
-        setStakeAmount(0);
-        updatePlans();
-      }
+  const handleOnStake = useCallback(async () => {
+    console.log(authenticated, isConnected)
+    if (!authenticated) {
+      login();
+      return
     }
-  }
+    if (!isConnected) {
+      connectWallet();
+      return
+    }
+    await handleStake(stakeAmount, selectedPlan);
+  }, [authenticated, isConnected, stakeAmount, selectedPlan])
 
-  const handleUnstake = async () => {
-    if (!isConnected) {
-      if(!authenticated){
-        login();
-      } else {
-        connectWallet();
-      }
-    } else {
-      // user has to unstake full amount of the plan
-      if (stakeAmount != unstakeSelectedPlan?.stake) {
-        toast.error('Unstake full amount.');
-        return;
-      }
-      // call unstake function with selected unstake plan
-      const unstakeTx = await toast.promise(writeContract(config, {
-        abi: stakingContractAbi,
-        address: constants.stakingContractAddress,
-        functionName: "unstake",
-        args: [unstakeSelectedPlan.id],
-      }),{
-        loading: 'Unstaking...',
-        success: <b>Approved!</b>,
-        error: <b>Not approved.</b>,
-      });
-      // if transaction created, wait it until confirmed
-      if (unstakeTx) {
-        await toast.promise(waitForTransactionReceipt(config, {
-          hash: unstakeTx,
-        }),{
-          loading: 'Confirming transaction...',
-          success: <b>Confirmed!</b>,
-          error: <b>Not confirmed.</b>,
-        })
-        // after transaction confirmed, update status of staker
-        setStakeAmount(0);
-        updatePlans();
-      }
+  const handleOnUnstake = useCallback(async () => {
+    console.log(authenticated, isConnected)
+    if (!authenticated) {
+      login();
+      return
     }
-  }
+    if (!isConnected) {
+      connectWallet();
+      return
+    }
+    await handleUnstake(stakeAmount, selectedStakingPlan);
+  }, [authenticated, isConnected, stakeAmount, selectedStakingPlan])
 
   useEffect(() => {
     setUnlockingDuration(0);
-    let seconds = unstakeSelectedPlan?.unlockingTime - Math.floor(Date.now() / 1000);
+    let seconds = selectedStakingPlan?.unlockingTime - Math.floor(Date.now() / 1000);
     if (seconds > 0) {
       const unstakeInterval = setInterval(() => {
         seconds--;
@@ -283,7 +167,7 @@ function Stake() {
       }, 1000);
       return () => clearInterval(unstakeInterval);
     }
-}, [unstakeSelectedPlan]);
+  }, [selectedStakingPlan]);
 
   return (
     <Layout2>
@@ -378,7 +262,7 @@ function Stake() {
                 className="stake__btn"
                 style={{ opacity: isConnected ? selectedPlan && stakeAmount >= parseFloat(selectedPlan?.minimalAmount) && stakeAmount <= phgxBalance ? 1 : 0.4 : 1}}
               >
-                <Button text={isConnected ? "stake" : "connect wallet"} onClick={handleStake}/>
+                <Button text={authenticated ? isConnected ? "stake" : "connect wallet" : "log in"} onClick={handleOnStake}/>
               </div>
             </section>
           ) : (
@@ -392,14 +276,14 @@ function Stake() {
               <div className="box__dropdown" onClick={() => toggleModal()}>
                 <p
                   style={{
-                    color: unstakeSelectedPlan
+                    color: selectedStakingPlan
                       ? "var(--light-orange)"
                       : "white",
-                    opacity: unstakeSelectedPlan ? 1 : 0.6,
+                    opacity: selectedStakingPlan ? 1 : 0.6,
                   }}
                 >
-                  {unstakeSelectedPlan
-                    ? unstakeSelectedPlan.label
+                  {selectedStakingPlan
+                    ? selectedStakingPlan.label
                     : "Choose a pool"}
                 </p>
                 <Image alt="Image" src={Arrow} width={15} height={15} />
@@ -409,11 +293,11 @@ function Stake() {
               {isModalOpen && (
                 <UnstakeModal
                   toggleModal={toggleUnstakeModal}
-                  selectedPlan={unstakeSelectedPlan}
+                  selectedPlan={selectedStakingPlan}
                 />
               )}
 
-              {unstakeSelectedPlan && !isModalOpen ? (
+              {selectedStakingPlan && !isModalOpen ? (
                 <div className="duration__list unstake">
                   <p>
                     Unlocking in:{" "}
@@ -424,8 +308,8 @@ function Stake() {
                   </p>
 
                   <p>
-                    Principal: <span> {unstakeSelectedPlan.stake} </span>{" "}
-                    {unstakeSelectedPlan.balance == 0 && (
+                    Principal: <span> {selectedStakingPlan.stake} </span>{" "}
+                    {selectedStakingPlan.balance == 0 && (
                       <span
                         style={{ textDecoration: "underline", fontSize: 12 }}
                       >
@@ -436,7 +320,7 @@ function Stake() {
                   </p>
 
                   <p>
-                    Reward: <span> {unstakeSelectedPlan.reward} </span>
+                    Reward: <span> {selectedStakingPlan.reward} </span>
                   </p>
                 </div>
               ) : null}
@@ -448,17 +332,17 @@ function Stake() {
                   onChange={(e) => setStakeAmount(e.target.value)}
                   className="stake__input"
                 />
-                <p onClick={() => setStakeAmount(unstakeSelectedPlan?.stake)}>
+                <p onClick={() => setStakeAmount(selectedStakingPlan?.stake)}>
                   max
                 </p>
               </div>
 
               <div
                 className="stake__btn"
-                // style={{ opacity: isConnected ? unstakeSelectedPlan && unlockingDuration==0 && unstakeSelectedPlan?.stake == stakeAmount ? 1 : 0.4 : 1, }}
+                // style={{ opacity: isConnected ? selectedStakingPlan && unlockingDuration==0 && selectedStakingPlan?.stake == stakeAmount ? 1 : 0.4 : 1, }}
               >
                 <Button
-                  text={isConnected ? "withdraw" : "connect wallet"} onClick={handleUnstake}
+                  text={authenticated ? isConnected ? "withdraw" : "connect wallet" : "log in"} onClick={handleOnUnstake}
                 />
               </div>
             </section>
