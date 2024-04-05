@@ -112,12 +112,8 @@ function Stake() {
   };
 
   useEffect(() => {
-    if(plans.length) {
-      setSelectedPlan(plans[0])
-    }
-    if(stakingPlans.length) {
-      setSelectedStakingPlan(stakingPlans[0])
-    }
+    setSelectedPlan(plans[0])
+    setSelectedStakingPlan(stakingPlans[0])
   }, [plans, stakingPlans])
 
   useEffect(() => {

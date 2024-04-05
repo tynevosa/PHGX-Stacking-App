@@ -94,7 +94,7 @@ const useActiveWagmi = () => {
           error: 'Stake failed!',
         });
         // update information after staking
-        await sleep(2000);
+        await sleep(3000);
         await handleFetchPlans();
       },
       onError(error) {
@@ -114,7 +114,7 @@ const useActiveWagmi = () => {
           error: 'Unstake failed!',
         });
         // update information after unstaking
-        await sleep(2000);
+        await sleep(3000);
         await handleFetchPlans();
       },
       onError(error) {
